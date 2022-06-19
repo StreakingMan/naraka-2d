@@ -11,6 +11,7 @@
         "release": "standard-version"
     },
     "dependencies": {
+        "pixi.js": "^6.4.2",
         "vue": "^3.2.25"
     },
     "devDependencies": {
