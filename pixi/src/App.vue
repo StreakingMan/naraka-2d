@@ -2,7 +2,7 @@
 import 'pixi-spine';
 import * as PIXI from 'pixi.js';
 import { Spine } from 'pixi-spine';
-import spineboyPro from './assets/mix-and-match-pro.json?url';
+import spineboyPro from './assets/spineboy-pro.json?url';
 import { onMounted } from 'vue';
 
 onMounted(() => {
@@ -11,7 +11,7 @@ onMounted(() => {
     // load spine data
     PIXI.Assets.load(spineboyPro).then(onAssetsLoaded);
 
-    function onAssetsLoaded(spineboyAsset) {
+    function onAssetsLoaded(spineboyAsset: any) {
         console.log(spineboyAsset);
         app.stage.interactive = true;
 

@@ -1,0 +1,25 @@
+{
+    "name": "naraka-2d-pixi",
+    "version": "1.0.0",
+    "description": "永劫无间横版格斗pixijs版",
+    "private": true,
+    "scripts": {
+        "dev": "vite",
+        "build": "vue-tsc --noEmit && vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "pixi-spine": "^4.0.3",
+        "pixi.js": "^7.2.4",
+        "vue": "^3.2.47"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-vue": "^4.2.1",
+        "autoprefixer": "^10.4.14",
+        "postcss": "^8.4.23",
+        "sass": "^1.62.1",
+        "tailwindcss": "^3.3.2",
+        "vite": "^4.3.4",
+        "vue-tsc": "^1.6.4"
+    }
+}

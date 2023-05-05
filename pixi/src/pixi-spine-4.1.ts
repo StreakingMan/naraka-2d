@@ -1,4 +1,5 @@
 import '@pixi-spine/loader-base'; // Side effect install the loader
-// eslint-disable-next-line @typescript-eslint/no-duplicate-imports
+// @ts-ignore
 export * from '@pixi-spine/runtime-4.1';
+// @ts-ignore
 export * from '@pixi-spine/base';
