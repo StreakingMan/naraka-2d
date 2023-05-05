@@ -1,42 +1,53 @@
 <script setup lang="ts">
-// This starter template is using Vue 3 <script setup> SFCs
-// Check out https://vuejs.org/api/sfc-script-setup.html#script-setup
-import HelloWorld from './components/HelloWorld.vue';
+import 'pixi-spine';
 import * as PIXI from 'pixi.js';
-import { onMounted, onUnmounted } from 'vue';
-
-let app = new PIXI.Application({
-    width: 500,
-    height: 500,
-    backgroundColor: 0,
-});
-
-let sprite = PIXI.Sprite.from('src/assets/logo.png');
-app.stage.addChild(sprite);
-sprite.x = app.renderer.width / 2;
-sprite.y = app.renderer.height / 2;
-app.ticker.add((delta) => {
-    sprite.rotation += 0.1 * delta;
-});
+import { Spine } from 'pixi-spine';
+import spineboyPro from './assets/mix-and-match-pro.json?url';
+import { onMounted } from 'vue';
 
 onMounted(() => {
-    document.getElementById('app')?.appendChild(app.view);
+    const app = new PIXI.Application();
+    document.getElementById('container')!.appendChild(app.view as any);
+    // load spine data
+    PIXI.Assets.load(spineboyPro).then(onAssetsLoaded);
+
+    function onAssetsLoaded(spineboyAsset) {
+        console.log(spineboyAsset);
+        app.stage.interactive = true;
+
+        // create a spine boy
+        const spineBoyPro = new Spine(spineboyAsset.spineData);
+
+        // set the position
+        spineBoyPro.x = app.screen.width / 2;
+        spineBoyPro.y = app.screen.height;
+
+        spineBoyPro.scale.set(0.5);
+
+        app.stage.addChild(spineBoyPro);
+
+        window.addEventListener('keydown', (e) => {
+            console.log(e.key);
+            if (e.key === 'ArrowLeft') {
+                spineBoyPro.scale.x = -0.5;
+            } else if (e.key === 'ArrowRight') {
+                spineBoyPro.scale.x = 0.5;
+            }
+
+            if (e.key === 'ArrowUp') {
+                spineBoyPro.state.setAnimation(0, 'jump', false);
+                spineBoyPro.state.addAnimation(0, 'run', true, 0);
+            } else if (e.key === 'ArrowDown') {
+                spineBoyPro.state.setAnimation(0, 'death', false);
+                spineBoyPro.state.addAnimation(0, 'idle', true, 0);
+            }
+        });
+
+        spineBoyPro.state.setAnimation(0, 'walk', true);
+    }
 });
 </script>
 
 <template>
-    <img alt="Vue logo" src="./assets/logo.png" />
-    <HelloWorld msg="Hello Vue 3 + TypeScript + Vite" />
-    <div id="app"></div>
+    <div id="container" class="h-screen w-screen"></div>
 </template>
-
-<style>
-#app {
-    font-family: Avenir, Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-align: center;
-    color: #2c3e50;
-    margin-top: 60px;
-}
-</style>
