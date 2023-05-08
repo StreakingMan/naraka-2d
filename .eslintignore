@@ -2,6 +2,7 @@
 
 node_modules
 dist
+phaser/public
 
 !.eslintrc.js
 !.prettierrc.js
