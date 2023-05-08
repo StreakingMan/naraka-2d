@@ -19,6 +19,13 @@ const preload: ScenePreloadCallback = function () {
         frameWidth: 32,
         frameHeight: 48,
     });
+    // @ts-ignore
+    this.load.spine(
+        'spineboy',
+        'assets/spineboy-pro.json',
+        'assets/spineboy-pro.atlas',
+        true
+    );
 };
 
 const create: SceneCreateCallback = function () {
@@ -52,8 +59,15 @@ const create: SceneCreateCallback = function () {
         repeat: -1,
     });
 
+    // spine
+    const spineboy = this.add
+        // @ts-ignore
+        .spine(400, 500, 'spineboy', 'idle', true)
+        .setScale(0.2);
+
     // 碰撞
     this.physics.add.collider(player, platforms);
+    this.physics.add.collider(spineboy, platforms);
 
     // 键盘
     if (this.input.keyboard) cursors = this.input.keyboard.createCursorKeys();
@@ -94,6 +108,16 @@ const config: GameConfig = {
         preload,
         create,
         update,
+        pack: {
+            files: [
+                {
+                    type: 'scenePlugin',
+                    key: 'SpinePlugin',
+                    url: 'plugins/spine4.1/SpinePluginDebug.js',
+                    sceneKey: 'spine',
+                },
+            ],
+        },
     },
 };
 
