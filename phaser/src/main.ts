@@ -113,7 +113,7 @@ const config: GameConfig = {
                 {
                     type: 'scenePlugin',
                     key: 'SpinePlugin',
-                    url: 'plugins/spine4.1/SpinePluginDebug.js',
+                    url: 'local-plugins/SpinePluginDebug.js',
                     sceneKey: 'spine',
                 },
             ],
