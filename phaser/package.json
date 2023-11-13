@@ -10,7 +10,8 @@
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "dependencies": {
-        "phaser": "^3.60.0"
+        "@esotericsoftware/spine-phaser": "^4.2.26",
+        "phaser": "^3.70.0"
     },
     "devDependencies": {
         "vite": "^4.3.4"
