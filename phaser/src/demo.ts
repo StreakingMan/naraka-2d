@@ -12,7 +12,9 @@ import SceneUpdateCallback = Phaser.Types.Scenes.SceneUpdateCallback;
 import CursorKeys = Phaser.Types.Input.Keyboard.CursorKeys;
 
 const width = window.innerWidth;
-const height = window.innerHeight;
+const height = window.innerHeight * 0.8;
+const scale = 0.5;
+const speed = 220;
 let cursors: CursorKeys;
 const preload: ScenePreloadCallback = function () {
     this.load.spineBinary(
@@ -26,15 +28,23 @@ const preload: ScenePreloadCallback = function () {
 };
 
 let mixAndMatch: SpineGameObject;
+let body: Phaser.Physics.Arcade.Body;
 const create: SceneCreateCallback = function () {
     mixAndMatch = this.add.spine(
-        400,
-        500,
+        width / 2,
+        height,
         'mix-and-match-data',
         'mix-and-match-atlas',
         new SkinsAndAnimationBoundsProvider(null, ['full-skins/girl'])
     );
-    mixAndMatch.scale = 0.2;
+
+    // 物理
+    this.physics.add.existing(mixAndMatch);
+    body = mixAndMatch.body as Phaser.Physics.Arcade.Body;
+    body.setOffset(0, 50);
+    body.setCollideWorldBounds(true);
+
+    mixAndMatch.setScale(scale);
     mixAndMatch.animationState.setAnimation(0, 'idle', true);
     const skeletonData = mixAndMatch.skeleton.data;
     const skin = new Skin('custom');
@@ -79,15 +89,21 @@ const update: SceneUpdateCallback = function () {
         if (mixAndMatch.state === 'left') return;
         mixAndMatch.state = 'left';
         mixAndMatch.animationState.setAnimation(0, 'walk', true);
-        mixAndMatch.scaleX = -0.2;
+        body.setVelocity(-speed, 0);
+        mixAndMatch.scaleX = -scale;
+        mixAndMatch.setOrigin(-0.5, 1);
     } else if (cursors.right.isDown) {
         console.log('right');
         if (mixAndMatch.state === 'right') return;
         mixAndMatch.state = 'right';
         mixAndMatch.animationState.setAnimation(0, 'walk', true);
-        mixAndMatch.scaleX = 0.2;
+        body.setVelocity(speed, 0);
+        mixAndMatch.setOrigin(0.5, 1);
+        mixAndMatch.scaleX = scale;
     } else {
         idle();
+
+        body.setVelocity(0, 0);
     }
 };
 
@@ -100,6 +116,13 @@ const config: GameConfig = {
         preload,
         create,
         update,
+    },
+    physics: {
+        default: 'arcade',
+        arcade: {
+            debug: true,
+            gravity: { y: 200 },
+        },
     },
     plugins: {
         scene: [
