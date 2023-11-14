@@ -15,5 +15,6 @@
     },
     "devDependencies": {
         "vite": "^4.3.4"
-    }
+    },
+    "license": "MIT"
 }
