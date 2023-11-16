@@ -25,10 +25,21 @@ const preload: ScenePreloadCallback = function () {
         'mix-and-match-atlas',
         'assets/mix-and-match-pro/mix-and-match-pro.atlas'
     );
+
+    this.load.spineBinary(
+        'spineboy-pro-data',
+        'assets/spineboy-pro/spineboy-pro.skel'
+    );
+    this.load.spineAtlas(
+        'spineboy-pro-atlas',
+        'assets/spineboy-pro/spineboy-pro.atlas'
+    );
 };
 
 let mixAndMatch: SpineGameObject;
-let body: Phaser.Physics.Arcade.Body;
+let mixAndMatchBody: Phaser.Physics.Arcade.Body;
+let spineboy: SpineGameObject;
+let spineboyBody: Phaser.Physics.Arcade.Body;
 const create: SceneCreateCallback = function () {
     mixAndMatch = this.add.spine(
         width / 2,
@@ -37,11 +48,20 @@ const create: SceneCreateCallback = function () {
         'mix-and-match-atlas',
         new SkinsAndAnimationBoundsProvider(null, ['full-skins/girl'])
     );
+    spineboy = this.add.spine(
+        width / 3,
+        height,
+        'spineboy-pro-data',
+        'spineboy-pro-atlas'
+    );
 
     // 物理
     this.physics.add.existing(mixAndMatch);
-    body = mixAndMatch.body as Phaser.Physics.Arcade.Body;
-    body.setCollideWorldBounds(true);
+    mixAndMatchBody = mixAndMatch.body as Phaser.Physics.Arcade.Body;
+    mixAndMatchBody.setCollideWorldBounds(true);
+    this.physics.add.existing(spineboy);
+    spineboyBody = spineboy.body as Phaser.Physics.Arcade.Body;
+    spineboyBody.setCollideWorldBounds(true);
 
     mixAndMatch.setScale(scale);
     mixAndMatch.animationState.setAnimation(0, 'idle', true);
@@ -59,6 +79,10 @@ const create: SceneCreateCallback = function () {
     skin.addSkin(skeletonData.findSkin('full-skins/girl')!);
     mixAndMatch.skeleton.setSkin(skin);
     mixAndMatch.skeleton.setToSetupPose();
+
+    spineboy.setScale(scale);
+    spineboy.animationState.setAnimation(0, 'idle', true);
+    spineboy.skeleton.setToSetupPose();
 
     // 键盘
     if (this.input.keyboard) cursors = this.input.keyboard.createCursorKeys();
@@ -89,21 +113,37 @@ const update: SceneUpdateCallback = function () {
         if (mixAndMatch.state === 'left') return;
         mixAndMatch.state = 'left';
         mixAndMatch.animationState.setAnimation(0, 'walk', true);
-        body.setVelocity(-speed, 0);
+        mixAndMatchBody.setVelocity(-speed, 0);
         mixAndMatch.scaleX = -scale;
-        mixAndMatch.setOrigin(-0.5, 1);
+        // mixAndMatch.setOrigin(
+        //     Math.abs(mixAndMatch.originX) - 1,
+        //     mixAndMatch.originY
+        // );
+
+        console.log(mixAndMatch.originX);
+
+        // spineboyBody.setVelocity(-speed, 0);
+        // spineboy.scaleX = -scale;
     } else if (cursors.right.isDown) {
         console.log('right');
         if (mixAndMatch.state === 'right') return;
         mixAndMatch.state = 'right';
         mixAndMatch.animationState.setAnimation(0, 'walk', true);
-        body.setVelocity(speed, 0);
+        mixAndMatchBody.setVelocity(speed, 0);
         mixAndMatch.scaleX = scale;
-        mixAndMatch.setOrigin(0.5, 1);
+        // mixAndMatch.setOrigin(
+        //     Math.abs(mixAndMatch.originX),
+        //     mixAndMatch.originY
+        // );
+        console.log(mixAndMatch.originX);
+
+        // spineboyBody.setVelocity(speed, 0);
+        // spineboy.scaleX = scale;
     } else {
         idle();
 
-        body.setVelocity(0, 0);
+        mixAndMatchBody.setVelocity(0, 0);
+        spineboyBody.setVelocity(0, 0);
     }
 };
 
