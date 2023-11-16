@@ -41,22 +41,22 @@ const create: SceneCreateCallback = function () {
     // 物理
     this.physics.add.existing(mixAndMatch);
     body = mixAndMatch.body as Phaser.Physics.Arcade.Body;
-    body.setOffset(0, 50);
     body.setCollideWorldBounds(true);
 
     mixAndMatch.setScale(scale);
     mixAndMatch.animationState.setAnimation(0, 'idle', true);
     const skeletonData = mixAndMatch.skeleton.data;
     const skin = new Skin('custom');
-    skin.addSkin(skeletonData.findSkin('skin-base')!);
-    skin.addSkin(skeletonData.findSkin('nose/short')!);
-    skin.addSkin(skeletonData.findSkin('eyelids/girly')!);
-    skin.addSkin(skeletonData.findSkin('eyes/violet')!);
-    skin.addSkin(skeletonData.findSkin('hair/brown')!);
-    skin.addSkin(skeletonData.findSkin('clothes/hoodie-orange')!);
-    skin.addSkin(skeletonData.findSkin('legs/pants-jeans')!);
-    skin.addSkin(skeletonData.findSkin('accessories/bag')!);
-    skin.addSkin(skeletonData.findSkin('accessories/hat-red-yellow')!);
+    // skin.addSkin(skeletonData.findSkin('skin-base')!);
+    // skin.addSkin(skeletonData.findSkin('nose/short')!);
+    // skin.addSkin(skeletonData.findSkin('eyelids/girly')!);
+    // skin.addSkin(skeletonData.findSkin('eyes/violet')!);
+    // skin.addSkin(skeletonData.findSkin('hair/brown')!);
+    // skin.addSkin(skeletonData.findSkin('clothes/hoodie-orange')!);
+    // skin.addSkin(skeletonData.findSkin('legs/pants-jeans')!);
+    // skin.addSkin(skeletonData.findSkin('accessories/bag')!);
+    // skin.addSkin(skeletonData.findSkin('accessories/hat-red-yellow')!);
+    skin.addSkin(skeletonData.findSkin('full-skins/girl')!);
     mixAndMatch.skeleton.setSkin(skin);
     mixAndMatch.skeleton.setToSetupPose();
 
@@ -98,8 +98,8 @@ const update: SceneUpdateCallback = function () {
         mixAndMatch.state = 'right';
         mixAndMatch.animationState.setAnimation(0, 'walk', true);
         body.setVelocity(speed, 0);
-        mixAndMatch.setOrigin(0.5, 1);
         mixAndMatch.scaleX = scale;
+        mixAndMatch.setOrigin(0.5, 1);
     } else {
         idle();
 
