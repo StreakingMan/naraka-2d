@@ -3,6 +3,8 @@
     "private": true,
     "version": "0.0.0",
     "scripts": {
+        "phaser": "pnpm -C ./phaser dev",
+        "pixi": "pnpm -C ./pixi dev",
         "prepare": "husky install"
     },
     "devDependencies": {
