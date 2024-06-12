@@ -1,6 +1,5 @@
 import * as Phaser from 'phaser';
 import {
-    Skin,
     SkinsAndAnimationBoundsProvider,
     SpineGameObject,
     SpinePlugin,
@@ -13,85 +12,45 @@ import CursorKeys = Phaser.Types.Input.Keyboard.CursorKeys;
 
 const width = window.innerWidth;
 const height = window.innerHeight * 0.8;
-const scale = 0.5;
-const speed = 220;
+const scale = 1;
+const speed = 2;
 let cursors: CursorKeys;
 const preload: ScenePreloadCallback = function () {
-    this.load.spineBinary(
-        'mix-and-match-data',
-        'assets/mix-and-match-pro/mix-and-match-pro.skel'
-    );
-    this.load.spineAtlas(
-        'mix-and-match-atlas',
-        'assets/mix-and-match-pro/mix-and-match-pro.atlas'
-    );
-
-    this.load.spineBinary(
-        'spineboy-pro-data',
-        'assets/spineboy-pro/spineboy-pro.skel'
-    );
-    this.load.spineAtlas(
-        'spineboy-pro-atlas',
-        'assets/spineboy-pro/spineboy-pro.atlas'
-    );
+    this.load.spineBinary('hero-data', 'assets/hero/hero-pro.skel');
+    this.load.spineAtlas('hero-atlas', 'assets/hero/hero-pro.atlas');
 };
 
-let mixAndMatch: SpineGameObject;
-let mixAndMatchBody: Phaser.Physics.Arcade.Body;
-let spineboy: SpineGameObject;
-let spineboyBody: Phaser.Physics.Arcade.Body;
+let hero: SpineGameObject;
+
 const create: SceneCreateCallback = function () {
-    mixAndMatch = this.add.spine(
-        width / 2,
-        height,
-        'mix-and-match-data',
-        'mix-and-match-atlas',
-        new SkinsAndAnimationBoundsProvider(null, ['full-skins/girl'])
-    );
-    spineboy = this.add.spine(
-        width / 3,
-        height,
-        'spineboy-pro-data',
-        'spineboy-pro-atlas'
-    );
+    hero = this.add.spine(width / 2, height / 2, 'hero-data', 'hero-atlas');
+
+    console.log(hero);
 
     // 物理
-    this.physics.add.existing(mixAndMatch);
-    mixAndMatchBody = mixAndMatch.body as Phaser.Physics.Arcade.Body;
-    mixAndMatchBody.setCollideWorldBounds(true);
-    this.physics.add.existing(spineboy);
-    spineboyBody = spineboy.body as Phaser.Physics.Arcade.Body;
-    spineboyBody.setCollideWorldBounds(true);
+    this.matter.world.setBounds(0, 0, width, height);
+    this.matter.add.gameObject(hero, {
+        friction: 0,
+    });
+    this.matter.add.polygon(width / 3, 0, 6, 40);
 
-    mixAndMatch.setScale(scale);
-    mixAndMatch.animationState.setAnimation(0, 'idle', true);
-    const skeletonData = mixAndMatch.skeleton.data;
-    const skin = new Skin('custom');
-    // skin.addSkin(skeletonData.findSkin('skin-base')!);
-    // skin.addSkin(skeletonData.findSkin('nose/short')!);
-    // skin.addSkin(skeletonData.findSkin('eyelids/girly')!);
-    // skin.addSkin(skeletonData.findSkin('eyes/violet')!);
-    // skin.addSkin(skeletonData.findSkin('hair/brown')!);
-    // skin.addSkin(skeletonData.findSkin('clothes/hoodie-orange')!);
-    // skin.addSkin(skeletonData.findSkin('legs/pants-jeans')!);
-    // skin.addSkin(skeletonData.findSkin('accessories/bag')!);
-    // skin.addSkin(skeletonData.findSkin('accessories/hat-red-yellow')!);
-    skin.addSkin(skeletonData.findSkin('full-skins/girl')!);
-    mixAndMatch.skeleton.setSkin(skin);
-    mixAndMatch.skeleton.setToSetupPose();
+    // hero.setScale(scale);
+    hero.phaserWorldCoordinatesToSkeleton({
+        x: 800,
+        y: 100,
+    });
+    hero.animationState.setAnimation(0, 'idle', true);
 
-    spineboy.setScale(scale);
-    spineboy.animationState.setAnimation(0, 'idle', true);
-    spineboy.skeleton.setToSetupPose();
+    hero.skeleton.setToSetupPose();
 
     // 键盘
     if (this.input.keyboard) cursors = this.input.keyboard.createCursorKeys();
 };
 
 const idle = () => {
-    if (mixAndMatch.state === 'idle') return;
-    mixAndMatch.state = 'idle';
-    mixAndMatch.animationState.setAnimation(0, 'idle', true);
+    if (hero.state === 'idle') return;
+    hero.state = 'idle';
+    hero.animationState.setAnimation(0, 'idle', true);
 };
 
 const update: SceneUpdateCallback = function () {
@@ -100,50 +59,34 @@ const update: SceneUpdateCallback = function () {
     }
     if (cursors.space.isDown) {
         console.log('space');
-        if (mixAndMatch.state === 'dress-up') return;
-        mixAndMatch.state = 'dress-up';
-        mixAndMatch.animationState.setAnimation(0, 'dress-up', true);
+        if (hero.state === 'jump') return;
+        hero.state = 'jump';
+        this.matter.setVelocityY(hero, -speed * 6);
+        hero.animationState.setAnimation(0, 'jump', true);
     } else if (cursors.down.isDown) {
         console.log('down');
-        if (mixAndMatch.state === 'dance') return;
-        mixAndMatch.state = 'dance';
-        mixAndMatch.animationState.setAnimation(0, 'dance', true);
+        if (hero.state === 'crouch') return;
+        hero.state = 'crouch';
+        hero.animationState.setAnimation(0, 'crouch', true);
     } else if (cursors.left.isDown) {
         console.log('left');
-        if (mixAndMatch.state === 'left') return;
-        mixAndMatch.state = 'left';
-        mixAndMatch.animationState.setAnimation(0, 'walk', true);
-        mixAndMatchBody.setVelocity(-speed, 0);
-        mixAndMatch.scaleX = -scale;
-        // mixAndMatch.setOrigin(
-        //     Math.abs(mixAndMatch.originX) - 1,
-        //     mixAndMatch.originY
-        // );
-
-        console.log(mixAndMatch.originX);
-
-        // spineboyBody.setVelocity(-speed, 0);
-        // spineboy.scaleX = -scale;
+        if (hero.state !== 'left') {
+            hero.animationState.setAnimation(0, 'walk', true);
+        }
+        hero.state = 'left';
+        this.matter.setVelocityX(hero, -speed);
+        hero.scaleX = -scale;
     } else if (cursors.right.isDown) {
         console.log('right');
-        if (mixAndMatch.state === 'right') return;
-        mixAndMatch.state = 'right';
-        mixAndMatch.animationState.setAnimation(0, 'walk', true);
-        mixAndMatchBody.setVelocity(speed, 0);
-        mixAndMatch.scaleX = scale;
-        // mixAndMatch.setOrigin(
-        //     Math.abs(mixAndMatch.originX),
-        //     mixAndMatch.originY
-        // );
-        console.log(mixAndMatch.originX);
-
-        // spineboyBody.setVelocity(speed, 0);
-        // spineboy.scaleX = scale;
+        if (hero.state !== 'right') {
+            hero.animationState.setAnimation(0, 'walk', true);
+        }
+        hero.state = 'right';
+        this.matter.setVelocityX(hero, speed);
+        hero.scaleX = scale;
     } else {
         idle();
-
-        mixAndMatchBody.setVelocity(0, 0);
-        spineboyBody.setVelocity(0, 0);
+        // this.matter.setVelocity(hero, 0, 0);
     }
 };
 
@@ -158,10 +101,18 @@ const config: GameConfig = {
         update,
     },
     physics: {
-        default: 'arcade',
-        arcade: {
-            debug: true,
-            gravity: { y: 200 },
+        default: 'matter',
+        matter: {
+            debug: {
+                showBody: true,
+                showBounds: true,
+                showAxes: true,
+                showCollisions: true,
+                showPositions: true,
+                showStaticBody: true,
+                showVelocity: true,
+            },
+            gravity: { y: 1 },
         },
     },
     plugins: {
