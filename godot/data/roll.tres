@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AttackFrameData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/attack_frame_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+startup = 3
+active = 12
+recovery = 8
+damage = 0
+hitstop_frames = 0
+knockback = Vector2(0, 0)
+hitbox_offset = Vector2(0, 0)
+hitbox_size = Vector2(0, 0)
+unblockable = false
+breaks_parry = false
+min_charge_frames = 0
+max_charge_frames = 0

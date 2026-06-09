@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ReactionFrameData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/reaction_frame_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+stun_frames = 40
+knockback_decay = 0.88
+flash_frames = 10
+flash_color = Color(1, 0.4, 0.1, 0.9)
