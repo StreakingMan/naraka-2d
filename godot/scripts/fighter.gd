@@ -39,6 +39,15 @@ const HURTBOX_CROUCH_OFFSET := Vector2(0, -7)
 @export var fighter_name: String = "Fighter"
 @export var body_tint: Color = Color(0.92, 0.92, 0.96)
 
+# Optional sprite override. If set, _draw uses PoseLibrary.draw_sprite_pose
+# instead of the stick-figure poses — state is expressed via tint/lean/squish.
+var sprite_texture: Texture2D = null
+
+# Optional rigged body parts. If set (takes priority over sprite_texture), _draw
+# uses PoseLibrary.draw_rigged_pose — each limb is a textured sprite driven by
+# the same joint positions the stick figure uses.
+var body_sprites: BodySprites = null
+
 @export var attack_normal_data: AttackFrameData
 @export var attack_charge_t1_data: AttackFrameData
 @export var attack_charge_data: AttackFrameData
@@ -138,15 +147,38 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	PoseLibrary.draw_pose(
-		self,
-		state,
-		state_frame,
-		facing,
-		_current_charge_pct(),
-		flash_color if flash_frames > 0 else Color(0, 0, 0, 0),
-		attack_variant,
-	)
+	var flash: Color = flash_color if flash_frames > 0 else Color(0, 0, 0, 0)
+	if body_sprites != null and body_sprites.is_complete():
+		PoseLibrary.draw_rigged_pose(
+			self,
+			body_sprites,
+			state,
+			state_frame,
+			facing,
+			_current_charge_pct(),
+			flash,
+			attack_variant,
+		)
+	elif sprite_texture != null:
+		PoseLibrary.draw_sprite_pose(
+			self,
+			sprite_texture,
+			state,
+			state_frame,
+			facing,
+			_current_charge_pct(),
+			flash,
+		)
+	else:
+		PoseLibrary.draw_pose(
+			self,
+			state,
+			state_frame,
+			facing,
+			_current_charge_pct(),
+			flash,
+			attack_variant,
+		)
 	if last_outcome_frames > 0 and last_outcome >= 0:
 		var label := CombatResolver.outcome_name(last_outcome)
 		var font := ThemeDB.fallback_font

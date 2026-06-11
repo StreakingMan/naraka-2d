@@ -12,13 +12,16 @@ extends RefCounted
 #   dodge: bool    (just pressed)
 
 func tick(_fighter) -> Dictionary:
-	# J/K are both bound to attack_charge. Pressing & releasing within tier-1 threshold
-	# fires a normal attack via the charge release path (Fighter._resolve_charge_release).
-	# So the player never produces a `normal` intent directly — that field stays false
-	# for player input. (AI controllers still use it for instant-attack convenience.)
+	# J is bound to attack_charge. From IDLE/WALK, the player goes through
+	# CHARGING_UP and the tap-vs-hold duration decides between ATTACK_NORMAL and
+	# the charge tiers (Fighter._resolve_charge_release).
+	# From CROUCH/JUMP, there's no charge path — the just-pressed `normal` intent
+	# below fires an immediate ATTACK_NORMAL directly out of those states.
+	# (On IDLE/WALK these intents collide for one frame; `holding_charge` is
+	# checked first in Fighter._resolve_state so the charge path still wins.)
 	return {
 		"move": int(Input.is_action_pressed(&"move_right")) - int(Input.is_action_pressed(&"move_left")),
-		"normal": false,
+		"normal": Input.is_action_just_pressed(&"attack_charge"),
 		"charge_hold": Input.is_action_pressed(&"attack_charge"),
 		"charge_release": Input.is_action_just_released(&"attack_charge"),
 		"parry": Input.is_action_just_pressed(&"parry"),

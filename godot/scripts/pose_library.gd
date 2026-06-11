@@ -323,6 +323,537 @@ static func _draw_jump(canvas: CanvasItem, _frame: int, facing: int, body_color:
 	canvas.draw_line(Vector2(0, -25), hand, body_color, LIMB_WIDTH)
 	canvas.draw_line(hand, hand + _mirror_x(Vector2(16, -4), facing), weapon_color, WEAPON_WIDTH)
 
+# ─── Rigged pose (PSD-driven layered body parts) ──────────────────────────────
+# All joint positions are derived from PSD coordinates (BodySprites.PSD_*) via
+# the BodySprites.psd_to_fighter() helper, with x mirrored when facing left.
+# Per-state builders override only the joints that move (hands, feet, body tilt);
+# everything else stays at the artist-intended rest pose.
+class Skeleton:
+	extends RefCounted
+	# Head/neck (head's anchor sits at neck — the chin-of-head pivot lands here)
+	var head_pos: Vector2 = Vector2.ZERO
+	var neck: Vector2 = Vector2.ZERO
+	# Two separate shoulders (front facing forward, back trailing)
+	var shoulder_back: Vector2 = Vector2.ZERO
+	var shoulder_front: Vector2 = Vector2.ZERO
+	# Two separate hips
+	var hip_back: Vector2 = Vector2.ZERO
+	var hip_front: Vector2 = Vector2.ZERO
+	# Limb endpoints
+	var hand_back: Vector2 = Vector2.ZERO
+	var hand_front: Vector2 = Vector2.ZERO
+	var foot_back: Vector2 = Vector2.ZERO
+	var foot_front: Vector2 = Vector2.ZERO
+	var weapon_tip: Vector2 = Vector2.ZERO
+	# Whole-body rotation (HIT lean-back, PARRIED bow, ROLL tumble). Applied to
+	# torso/head/face/accessories; limbs follow because their endpoints are rotated.
+	var body_rotation: float = 0.0
+	var body_pivot: Vector2 = Vector2.ZERO
+	var tint: Color = Color.WHITE
+	var show_weapon: bool = true
+	# Stashed for the hair sway renderer — hair lag depends on the active state
+	# and animation frame, not on the joint values.
+	var state: int = 0
+	var frame: int = 0
+
+	func rotate_all(angle: float, pivot: Vector2) -> void:
+		if absf(angle) < 0.0001:
+			return
+		head_pos = _rot(head_pos, pivot, angle)
+		neck = _rot(neck, pivot, angle)
+		shoulder_back = _rot(shoulder_back, pivot, angle)
+		shoulder_front = _rot(shoulder_front, pivot, angle)
+		hip_back = _rot(hip_back, pivot, angle)
+		hip_front = _rot(hip_front, pivot, angle)
+		hand_back = _rot(hand_back, pivot, angle)
+		hand_front = _rot(hand_front, pivot, angle)
+		foot_back = _rot(foot_back, pivot, angle)
+		foot_front = _rot(foot_front, pivot, angle)
+		weapon_tip = _rot(weapon_tip, pivot, angle)
+
+	static func _rot(p: Vector2, c: Vector2, a: float) -> Vector2:
+		return c + (p - c).rotated(a)
+
+static func draw_rigged_pose(
+	canvas: CanvasItem,
+	sprites: BodySprites,
+	state: int,
+	frame: int,
+	facing: int,
+	charge_pct: float,
+	flash_color: Color,
+	attack_variant: int = 0,
+) -> void:
+	if sprites == null or sprites.parts.is_empty():
+		return
+	var skel := _build_skeleton(sprites, state, frame, facing, charge_pct, attack_variant)
+	_render_skeleton(canvas, sprites, skel, facing)
+	if flash_color.a > 0.0:
+		var c: Color = Color(flash_color.r, flash_color.g, flash_color.b, flash_color.a * 0.6)
+		canvas.draw_circle(skel.head_pos, 22.0, c)
+
+# PSD anchor → fighter-coord position, with facing flip on X.
+static func _psd2f(sprites: BodySprites, p: Vector2, facing: int) -> Vector2:
+	var f: Vector2 = sprites.psd_to_fighter(p)
+	f.x *= float(facing)
+	return f
+
+static func _build_skeleton(sprites: BodySprites, state: int, frame: int, facing: int, charge_pct: float, variant: int) -> Skeleton:
+	var s := Skeleton.new()
+	s.state = state
+	s.frame = frame
+	# Default = rest pose straight from PSD-measured joints.
+	s.neck = _psd2f(sprites, BodySprites.PSD_NECK, facing)
+	s.head_pos = s.neck
+	s.shoulder_back = _psd2f(sprites, BodySprites.PSD_SHOULDER_BACK, facing)
+	s.shoulder_front = _psd2f(sprites, BodySprites.PSD_SHOULDER_FRONT, facing)
+	s.hip_back = _psd2f(sprites, BodySprites.PSD_HIP_BACK, facing)
+	s.hip_front = _psd2f(sprites, BodySprites.PSD_HIP_FRONT, facing)
+	s.foot_back = _psd2f(sprites, BodySprites.PSD_FOOT_BACK, facing)
+	s.foot_front = _psd2f(sprites, BodySprites.PSD_FOOT_FRONT, facing)
+	s.hand_back = _psd2f(sprites, BodySprites.PSD_HAND_BACK, facing)
+	s.hand_front = _psd2f(sprites, BodySprites.PSD_HAND_FRONT, facing)
+	s.weapon_tip = _psd2f(sprites, BodySprites.PSD_WEAPON_TIP, facing)
+	s.body_pivot = (s.hip_back + s.hip_front) * 0.5
+
+	match state:
+		Fighter.State.IDLE:
+			var bob: float = sin(float(frame) * 0.08) * 0.6
+			s.head_pos.y += bob
+			s.neck.y += bob
+		Fighter.State.WALK:
+			# Legs scissor; arms swing opposite.
+			var phase: float = float(frame) * 0.35
+			var swing: float = sin(phase) * 5.0
+			s.foot_back.x += swing
+			s.foot_front.x -= swing
+			s.hand_back.y -= swing * 0.3
+			s.hand_front.y += swing * 0.3
+		Fighter.State.CROUCH:
+			# Sink the upper body — feet stay planted, hands drop.
+			var drop: float = 8.0
+			s.head_pos.y += drop; s.neck.y += drop
+			s.shoulder_back.y += drop * 0.75
+			s.shoulder_front.y += drop * 0.75
+			s.hand_back.y += drop
+			s.hand_front.y += drop
+		Fighter.State.JUMP:
+			# Hands rise for balance, feet tuck up slightly.
+			s.foot_back.y -= 4
+			s.foot_front.y -= 4
+			s.hand_back.y -= 6
+			s.hand_front.y -= 4
+		Fighter.State.ROLL:
+			# Tumble around the body centre.
+			s.body_pivot = (s.hip_back + s.hip_front) * 0.5 + Vector2(0, -10)
+			s.body_rotation = float(frame) * 0.4 * float(facing)
+			if frame >= 3 and frame < 15:
+				s.tint = Color(0.55, 0.95, 1.0)
+		Fighter.State.ATTACK_NORMAL:
+			_build_attack_normal_rig(s, frame, facing, variant)
+		Fighter.State.CHARGING_UP:
+			_build_charging_rig(s, frame, facing, charge_pct)
+		Fighter.State.ATTACK_CHARGE_T1:
+			_build_attack_charge_rig(s, frame, facing, 0.5)
+		Fighter.State.ATTACK_CHARGE:
+			_build_attack_charge_rig(s, frame, facing, charge_pct)
+		Fighter.State.PARRY:
+			# 中段の構え (Chūdan no kamae) — sword horizontal pointing at opponent.
+			# Sword is in the back arm; off-hand reaches forward to grip the hilt.
+			_pose_sword(s, facing, Vector2(6.0, 0.0), Vector2(36.0, -2.0))
+			_grip_two_handed(s, facing)
+			s.tint = Color(0.85, 1.0, 1.05)
+		Fighter.State.HIT:
+			s.body_rotation = 0.25 * float(facing)
+			var fade: float = clamp(float(frame) / 12.0, 0.0, 1.0)
+			s.tint = Color(1.4, 0.6, 0.6).lerp(Color.WHITE, fade)
+			s.hand_back.y -= 4; s.hand_front.y -= 4
+		Fighter.State.PARRIED:
+			s.body_rotation = -0.18 * float(facing)
+			s.tint = Color(0.7, 0.7, 0.85)
+	# Apply whole-body rotation after per-state joint assignment.
+	if absf(s.body_rotation) > 0.0001:
+		s.rotate_all(s.body_rotation, s.body_pivot)
+	return s
+
+# Set the sword arm (back arm) hand + sword tip from offsets relative to
+# shoulder_back. Hand offsets x mirrors with facing; the tip offset is relative
+# to shoulder_back too (NOT to the hand), so the sword's world direction is
+# always (tip - hand) regardless of arm reach.
+static func _pose_sword(s: Skeleton, facing: int, hand_off: Vector2, tip_off: Vector2) -> void:
+	s.hand_back = s.shoulder_back + Vector2(hand_off.x * float(facing), hand_off.y)
+	s.weapon_tip = s.shoulder_back + Vector2(tip_off.x * float(facing), tip_off.y)
+
+# Off-hand reaches toward the sword grip to imply a two-handed hold. arm_front
+# sprite has a fixed length (~18 fighter units after scale); we just orient it.
+static func _grip_two_handed(s: Skeleton, facing: int) -> void:
+	var to_sword: Vector2 = s.hand_back - s.shoulder_front
+	if to_sword.length_squared() < 0.01:
+		return
+	const ARM_REACH := 16.0
+	s.hand_front = s.shoulder_front + to_sword.normalized() * ARM_REACH
+
+# ─── Tachi techniques ──────────────────────────────────────────────────────
+# Each variant maps to a real tachi-jutsu kata. Frame budget per attack_normal.tres:
+# startup=5, active=3, recovery=12. Hand/tip offsets are relative to shoulder_back
+# (the sword arm); x is mirrored with facing inside _pose_sword.
+static func _build_attack_normal_rig(s: Skeleton, frame: int, facing: int, variant: int) -> void:
+	var hand_off: Vector2
+	var tip_off: Vector2
+	match variant:
+		1:
+			# 袈裟切り (Kesa-giri) — diagonal cut from upper-front shoulder to opposite hip.
+			# Startup: lift to upper-front 八双 stance; Active: arc down across the body;
+			# Recovery: blade ends low on the off-side.
+			if frame < 5:
+				var t: float = float(frame) / 5.0
+				hand_off = Vector2(lerpf(3.0, 6.0, t), lerpf(14.0, -12.0, t))
+				tip_off = Vector2(lerpf(-22.0, 12.0, t), lerpf(10.0, -42.0, t))
+			elif frame < 8:
+				# Diagonal sweep: tip arcs from upper-front through middle to lower-back.
+				var t: float = float(frame - 5) / 3.0
+				var ang: float = lerpf(-PI * 0.35, PI * 0.95, t)
+				hand_off = Vector2(cos(ang) * 12.0 + 2.0, sin(ang) * 14.0 + 2.0)
+				tip_off = Vector2(cos(ang - 0.25) * 36.0, sin(ang - 0.25) * 32.0 + 2.0)
+			else:
+				var t: float = clamp(float(frame - 8) / 10.0, 0.0, 1.0)
+				hand_off = Vector2(lerpf(-6.0, 3.0, t), lerpf(18.0, 14.0, t))
+				tip_off = Vector2(lerpf(-32.0, -22.0, t), lerpf(28.0, 10.0, t))
+		2:
+			# 唐竹 (Karatake) — overhead vertical chop straight down the centreline.
+			if frame < 5:
+				var t: float = float(frame) / 5.0
+				hand_off = Vector2(lerpf(3.0, 0.0, t), lerpf(14.0, -22.0, t))
+				tip_off = Vector2(lerpf(-22.0, 2.0, t), lerpf(10.0, -54.0, t))
+			elif frame < 8:
+				# Vertical chop: hand drops to chest, tip swings to forward-low.
+				var t: float = float(frame - 5) / 3.0
+				hand_off = Vector2(lerpf(0.0, 4.0, t), lerpf(-22.0, 6.0, t))
+				tip_off = Vector2(lerpf(2.0, 14.0, t), lerpf(-54.0, 32.0, t))
+			else:
+				var t: float = clamp(float(frame - 8) / 10.0, 0.0, 1.0)
+				hand_off = Vector2(lerpf(4.0, 3.0, t), lerpf(6.0, 14.0, t))
+				tip_off = Vector2(lerpf(14.0, -22.0, t), lerpf(32.0, 10.0, t))
+		_:
+			# 突き (Tsuki) — straight thrust. Pull back to hip, then drive forward in
+			# a horizontal line; no rotation through the active window.
+			if frame < 5:
+				var t: float = float(frame) / 5.0
+				hand_off = Vector2(lerpf(3.0, -6.0, t), lerpf(14.0, 4.0, t))
+				tip_off = Vector2(lerpf(-22.0, 22.0, t), lerpf(10.0, 4.0, t))
+			elif frame < 8:
+				hand_off = Vector2(14.0, 4.0)
+				tip_off = Vector2(46.0, 4.0)
+			else:
+				var t: float = clamp(float(frame - 8) / 10.0, 0.0, 1.0)
+				hand_off = Vector2(lerpf(14.0, 3.0, t), lerpf(4.0, 14.0, t))
+				tip_off = Vector2(lerpf(46.0, -22.0, t), lerpf(4.0, 10.0, t))
+	_pose_sword(s, facing, hand_off, tip_off)
+	_grip_two_handed(s, facing)
+
+# 八双の構え (Hassō no kamae) windup — sword raised vertically alongside the
+# sword-side shoulder, blade pointing straight up. The classic preparation stance
+# for both 横一文字 and 大袈裟.
+static func _build_charging_rig(s: Skeleton, frame: int, facing: int, charge_pct: float) -> void:
+	var t: float = clampf(float(frame) / 10.0, 0.0, 1.0)
+	var hand_idle: Vector2 = Vector2(3.0, 14.0)
+	var hand_hasso: Vector2 = Vector2(6.0, -8.0)
+	var tip_idle: Vector2 = Vector2(-22.0, 10.0)
+	var tip_hasso: Vector2 = Vector2(4.0, -42.0)
+	_pose_sword(s, facing, hand_idle.lerp(hand_hasso, t), tip_idle.lerp(tip_hasso, t))
+	_grip_two_handed(s, facing)
+	s.tint = Color(1.0, 0.95, 0.75).lerp(Color(1.0, 0.55, 0.35), charge_pct * t)
+
+# Charge attacks fired from 八双:
+#   T1 (≈ 0.5) → 横一文字 (Yoko ichimonji) — fast horizontal cut at neck height.
+#   T2 (1.0) → 大袈裟 (Ō-kesa) — full-body diagonal from overhead to opposite hip.
+# Frame budget per attack_charge.tres: startup=10, active=5, recovery=22.
+static func _build_attack_charge_rig(s: Skeleton, frame: int, facing: int, charge_pct: float) -> void:
+	var is_heavy: bool = charge_pct > 0.75
+	var hand_off: Vector2
+	var tip_off: Vector2
+	if frame < 10:
+		# Hold Hassō, gather power. Subtle drift up.
+		var t: float = float(frame) / 10.0
+		hand_off = Vector2(6.0 - t * 1.0, -8.0 - t * 4.0)
+		tip_off = Vector2(4.0 - t * 2.0, -42.0 - t * 6.0)
+	elif frame < 15:
+		var t: float = float(frame - 10) / 5.0
+		if is_heavy:
+			# 大袈裟 — overhead sweep ending at opposite hip.
+			var ang: float = lerpf(-PI * 0.45, PI * 0.9, t)
+			hand_off = Vector2(cos(ang) * 14.0 + 2.0, sin(ang) * 20.0)
+			tip_off = Vector2(cos(ang - 0.25) * 46.0, sin(ang - 0.25) * 42.0)
+		else:
+			# 横一文字 — horizontal at neck height.
+			hand_off = Vector2(lerpf(6.0, -6.0, t), -8.0)
+			tip_off = Vector2(lerpf(40.0, -32.0, t), -8.0)
+	else:
+		# Recovery — return toward rest.
+		var t: float = clamp(float(frame - 15) / 20.0, 0.0, 1.0)
+		if is_heavy:
+			hand_off = Vector2(lerpf(-4.0, 3.0, t), lerpf(20.0, 14.0, t))
+			tip_off = Vector2(lerpf(-32.0, -22.0, t), lerpf(28.0, 10.0, t))
+		else:
+			hand_off = Vector2(lerpf(-6.0, 3.0, t), lerpf(-8.0, 14.0, t))
+			tip_off = Vector2(lerpf(-32.0, -22.0, t), lerpf(-8.0, 10.0, t))
+	_pose_sword(s, facing, hand_off, tip_off)
+	_grip_two_handed(s, facing)
+	s.tint = Color(1.0, 0.95, 0.75).lerp(Color(1.0, 0.55, 0.35), charge_pct)
+
+# ─── Renderer ─────────────────────────────────────────────────────────────
+static func _render_skeleton(canvas: CanvasItem, sprites: BodySprites, skel: Skeleton, facing: int) -> void:
+	for part in sprites.parts:
+		match part.kind:
+			"limb":
+				_render_limb(canvas, sprites, part, skel, facing)
+			"static":
+				_render_static(canvas, sprites, part, skel, facing)
+			"head_child":
+				_render_head_child(canvas, sprites, part, skel, facing)
+			# "skip": unrecognised layer, drop silently
+
+static func _render_limb(canvas: CanvasItem, sprites: BodySprites, part, skel: Skeleton, facing: int) -> void:
+	var start: Vector2
+	var end: Vector2
+	match part.name:
+		"arm_back":
+			start = skel.shoulder_back; end = skel.hand_back
+		"arm_front":
+			start = skel.shoulder_front; end = skel.hand_front
+		"leg_back":
+			start = skel.hip_back; end = skel.foot_back
+		"leg_front":
+			start = skel.hip_front; end = skel.foot_front
+		"sword":
+			if not skel.show_weapon:
+				return
+			# Sword is gripped by the back arm (character's right hand).
+			start = skel.hand_back; end = skel.weapon_tip
+		_:
+			return
+	var d: Vector2 = end - start
+	if d.length_squared() < 0.0001:
+		return
+	var dir_angle: float = atan2(d.y, d.x)
+	# Mirror-compensated rotation (see body_sprites.gd notes).
+	var nat: float = part.natural_angle if facing == 1 else (PI - part.natural_angle)
+	var rot: float = dir_angle - nat
+	_draw_part(canvas, part, sprites.scale, start, rot, facing, skel.tint)
+
+static func _render_static(canvas: CanvasItem, sprites: BodySprites, part, skel: Skeleton, facing: int) -> void:
+	# Anchor: the PSD joint this part attaches to.
+	var world_pos: Vector2
+	if part.pivot_psd == BodySprites.PSD_NECK:
+		world_pos = skel.neck
+	else:
+		# Generic body-attached anchor — convert and apply body rotation.
+		var local: Vector2 = sprites.psd_to_fighter(part.pivot_psd)
+		local.x *= float(facing)
+		world_pos = (local - skel.body_pivot).rotated(skel.body_rotation) + skel.body_pivot
+	var rot: float = skel.body_rotation
+	if part.is_chest_jiggle:
+		rot += _chest_sway(skel, facing)
+	_draw_part(canvas, part, sprites.scale, world_pos, rot, facing, skel.tint)
+
+# Chest jiggle: a softer, lower-frequency secondary sway than hair. Anchored at
+# top-centre of the chest layer so rotation reads as the chest pendulum-ing.
+static func _chest_sway(skel: Skeleton, facing: int) -> float:
+	var f: float = float(skel.frame)
+	match skel.state:
+		Fighter.State.IDLE:
+			return sin(f * 0.06) * 0.012
+		Fighter.State.WALK:
+			# Bounce twice as fast as the leg swing — each step jolts the chest.
+			return sin(f * 0.70) * 0.07
+		Fighter.State.CROUCH:
+			# Settle forward as the upper body drops, then hold steady.
+			var t: float = clampf(f / 6.0, 0.0, 1.0)
+			return 0.04 * float(facing) * t
+		Fighter.State.JUMP:
+			# Trails up briefly when the character lifts off.
+			return -0.10 * float(facing) * clampf(1.0 - f / 12.0, 0.0, 1.0)
+		Fighter.State.ROLL:
+			return sin(f * 0.50) * 0.18 * float(facing)
+		Fighter.State.ATTACK_NORMAL, Fighter.State.ATTACK_CHARGE_T1, Fighter.State.ATTACK_CHARGE:
+			# Lag-then-snap with the swing, smaller than hair so it's a secondary read.
+			if f < 5.0:
+				return -0.05 * float(facing) * (f / 5.0)
+			elif f < 10.0:
+				return 0.10 * float(facing) * (1.0 - (f - 5.0) / 5.0)
+			else:
+				return 0.04 * float(facing) * exp(-(f - 10.0) / 8.0)
+		Fighter.State.CHARGING_UP:
+			var t: float = clampf(f / 10.0, 0.0, 1.0)
+			return -0.05 * float(facing) * t
+		Fighter.State.HIT:
+			# Big initial jolt that oscillates as it decays.
+			return sin(f * 0.55) * 0.22 * exp(-f / 10.0)
+		Fighter.State.PARRIED:
+			return 0.08 * float(facing)
+	return 0.0
+
+static func _render_head_child(canvas: CanvasItem, sprites: BodySprites, part, skel: Skeleton, facing: int) -> void:
+	# Offset from the head's neck-anchor in PSD coords → fighter coords → rotated.
+	var offset_psd: Vector2 = part.pivot_psd - BodySprites.PSD_NECK
+	var offset_fighter: Vector2 = Vector2(offset_psd.x * sprites.scale * float(facing), offset_psd.y * sprites.scale)
+	var rotated: Vector2 = offset_fighter.rotated(skel.body_rotation)
+	var world_pos: Vector2 = skel.neck + rotated
+	# Hair gets an extra sway rotation around its attachment point on top of the
+	# body rotation. Non-hair head children (eyes, mouth, brows…) render unchanged.
+	var rot: float = skel.body_rotation
+	if part.is_hair:
+		rot += _hair_sway(part, skel, facing)
+	_draw_part(canvas, part, sprites.scale, world_pos, rot, facing, skel.tint)
+
+# Per-strand sway angle. Combines a state-driven base swing with a per-strand
+# sine oscillation (different phase per strand → bangs don't move in lock-step).
+# Returned angle is positive = strand swings clockwise in screen space.
+static func _hair_sway(part, skel: Skeleton, facing: int) -> float:
+	var f: float = float(skel.frame)
+	var base: float = _hair_sway_base(skel.state, f, facing)
+	# Always-on subtle oscillation so hair is never perfectly still — keeps the
+	# character from looking like a frozen sprite during idle.
+	var stagger: float = sin(f * 0.13 + part.hair_phase) * 0.025
+	return (base + stagger) * part.hair_amplitude
+
+static func _hair_sway_base(state: int, f: float, facing: int) -> float:
+	match state:
+		Fighter.State.IDLE:
+			return sin(f * 0.07) * 0.025
+		Fighter.State.WALK:
+			# Sway in time with the walk-cycle leg swing. Hair lags ~π/2 behind the
+			# step so it reads as inertia, not as following the feet exactly.
+			return sin(f * 0.35 - PI * 0.5) * 0.14
+		Fighter.State.CROUCH:
+			# Settle forward as the head drops, then hold.
+			var t: float = clampf(f / 6.0, 0.0, 1.0)
+			return 0.06 * float(facing) * t
+		Fighter.State.JUMP:
+			# Lifts upward as the character ascends — hair angles backward (opposite of facing).
+			return -0.20 * float(facing)
+		Fighter.State.ROLL:
+			# Hair whips with the tumble; large amplitude with the rotation direction.
+			return sin(f * 0.45) * 0.35 * float(facing)
+		Fighter.State.ATTACK_NORMAL, Fighter.State.ATTACK_CHARGE_T1, Fighter.State.ATTACK_CHARGE:
+			# Hair lags behind the swing. Push back during startup, snap forward
+			# during the active window, then settle.
+			if f < 5.0:
+				return -0.10 * float(facing) * (f / 5.0)
+			elif f < 10.0:
+				return 0.20 * float(facing) * (1.0 - (f - 5.0) / 5.0)
+			else:
+				return 0.08 * float(facing) * exp(-(f - 10.0) / 6.0)
+		Fighter.State.CHARGING_UP:
+			# Gathering motion — hair drifts back/up as the sword raises.
+			var t: float = clampf(f / 10.0, 0.0, 1.0)
+			return -0.12 * float(facing) * t + sin(f * 0.18) * 0.015
+		Fighter.State.PARRY:
+			return 0.04 * float(facing)
+		Fighter.State.HIT:
+			# Violent whip in the direction of the hit, decaying.
+			return 0.4 * float(facing) * exp(-f / 8.0)
+		Fighter.State.PARRIED:
+			# Bow forward — hair drops in the facing direction.
+			return 0.18 * float(facing)
+	return 0.0
+
+# Common draw path: anchors part.pivot_psd (in texture pixels) at world_pos,
+# applies rotation + facing-mirror, tints with `tint`.
+static func _draw_part(canvas: CanvasItem, part, scale: float, world_pos: Vector2, rotation: float, facing: int, tint: Color) -> void:
+	if part.texture == null:
+		return
+	var t := Transform2D(rotation, Vector2(scale * float(facing), scale), 0.0, world_pos)
+	canvas.draw_set_transform_matrix(t)
+	var pivot_px: Vector2 = part.pivot_psd - part.psd_origin
+	canvas.draw_texture(part.texture, -pivot_px, tint)
+	canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+# ─── Sprite-based pose (single full-character texture) ─────────────────────────
+# Used when a Fighter has sprite_texture assigned. State is expressed through
+# transform (lean, squish, tumble) and modulate tint — no per-limb animation.
+# Feet sit at the fighter origin (y=+32 line is the ground level of stick figure).
+const SPRITE_TARGET_HEIGHT := 110.0
+const SPRITE_FEET_Y := 32.0
+
+static func draw_sprite_pose(
+	canvas: CanvasItem,
+	texture: Texture2D,
+	state: int,
+	frame: int,
+	facing: int,
+	charge_pct: float,
+	flash_color: Color,
+) -> void:
+	var tex_size: Vector2 = texture.get_size()
+	var base_scale: float = SPRITE_TARGET_HEIGHT / tex_size.y
+	var scale_x: float = base_scale
+	var scale_y: float = base_scale
+	var draw_pos: Vector2 = Vector2(0, SPRITE_FEET_Y)  # bottom-center of sprite
+	var rotation: float = 0.0
+	var tint: Color = Color.WHITE
+	var pivot_center: bool = false  # true = pivot from body center (for tumble)
+
+	match state:
+		Fighter.State.IDLE:
+			draw_pos.y += sin(float(frame) * 0.08) * 0.8
+		Fighter.State.WALK:
+			draw_pos.y += abs(sin(float(frame) * 0.35)) * 2.0
+		Fighter.State.CROUCH:
+			scale_y = base_scale * 0.7
+		Fighter.State.JUMP:
+			pass
+		Fighter.State.ROLL:
+			# Tumble: rotate around body center, in facing direction
+			pivot_center = true
+			rotation = float(frame) * 0.4 * facing
+			# Cyan tint during iframes (frames 3..14)
+			if frame >= 3 and frame < 15:
+				tint = Color(0.55, 0.95, 1.0)
+		Fighter.State.ATTACK_NORMAL:
+			# Lean forward briefly during the active window
+			if frame >= 4 and frame < 9:
+				rotation = -0.18 * facing
+				draw_pos.x += 8.0 * facing
+		Fighter.State.CHARGING_UP:
+			# Warm up to orange as charge fills
+			tint = Color(1.0, 0.95, 0.75).lerp(Color(1.0, 0.55, 0.35), charge_pct)
+			# Slight upward lift as windup
+			var t: float = clampf(float(frame) / 10.0, 0.0, 1.0)
+			draw_pos.y -= 2.0 * t
+		Fighter.State.ATTACK_CHARGE_T1, Fighter.State.ATTACK_CHARGE:
+			tint = Color(1.0, 0.75, 0.35) if state == Fighter.State.ATTACK_CHARGE else Color(1.0, 0.85, 0.45)
+			# Big lunge during the swing
+			if frame >= 10 and frame < 15:
+				rotation = -0.28 * facing
+				draw_pos.x += 12.0 * facing
+		Fighter.State.PARRY:
+			tint = Color(0.7, 0.95, 1.05)
+			# Subtle defensive back-lean
+			rotation = 0.08 * facing
+		Fighter.State.HIT:
+			# Red flash that fades, head tipped back
+			var fade: float = clamp(float(frame) / 12.0, 0.0, 1.0)
+			tint = Color(1.4, 0.6, 0.6).lerp(Color.WHITE, fade)
+			rotation = 0.2 * facing
+			draw_pos.x -= 5.0 * facing
+		Fighter.State.PARRIED:
+			tint = Color(0.7, 0.7, 0.85)
+			rotation = 0.15 * facing  # bow forward
+			draw_pos.x -= 2.0 * facing
+
+	# Build the draw transform. Negative scale_x via facing handles the mirror.
+	var transform: Transform2D = Transform2D(rotation, Vector2(scale_x * facing, scale_y), 0.0, draw_pos)
+	canvas.draw_set_transform_matrix(transform)
+	# In local space, place the sprite so its bottom-center sits at origin.
+	# If pivoting from center (roll), raise the pivot to the body midpoint.
+	var pivot_y: float = -tex_size.y if not pivot_center else -tex_size.y * 0.5
+	canvas.draw_texture(texture, Vector2(-tex_size.x * 0.5, pivot_y), tint)
+	canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+	if flash_color.a > 0.0:
+		canvas.draw_circle(Vector2(0, -55), 32.0, Color(flash_color.r, flash_color.g, flash_color.b, flash_color.a * 0.6))
+
 # Roll: tumbling ball with motion blur dots. Color shifts cyan during iframes.
 static func _draw_roll(canvas: CanvasItem, frame: int, facing: int, body_color: Color) -> void:
 	# Cyan tint during iframes (active window) — visual signal of invulnerability.

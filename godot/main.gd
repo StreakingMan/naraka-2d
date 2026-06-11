@@ -46,6 +46,18 @@ func _spawn_fighters() -> void:
 	player = _make_fighter(true, "Player", attack_n, attack_c1, attack_c, parry_d, roll_d, hit_n, hit_c, hit_p)
 	enemy = _make_fighter(false, "Trainer", attack_n, attack_c1, attack_c, parry_d, roll_d, hit_n, hit_c, hit_p)
 
+	# Equip the player with the PSD-rigged 妖刀姬. Loads 29 layered parts from
+	# the manifest extracted via tools/extract_psd.py. AI keeps the stick figure
+	# for visual contrast + cheap A/B reference while we tune feel.
+	var body: BodySprites = BodySprites.load_default("res://assets/rig")
+	if body.is_complete():
+		player.body_sprites = body
+	else:
+		# Fallback to the single-image sprite if the rig didn't load
+		var tex: Texture2D = _try_load_sprite("res://assets/yotojihime.png")
+		if tex != null:
+			player.sprite_texture = tex
+
 	add_child(player)
 	add_child(enemy)
 
@@ -72,6 +84,21 @@ func _make_fighter(is_player: bool, fname: String, an: AttackFrameData, ac1: Att
 	f.hit_charge_reaction = hc
 	f.hit_parried_reaction = hp
 	return f
+
+# Loads a PNG either via the Resource importer (preferred — gives a real
+# CompressedTexture2D after Godot has reimported the project) or, as a fallback
+# the first time the editor hasn't yet generated a .import sidecar, by reading
+# the raw bytes off disk into an ImageTexture. Returns null if both fail.
+func _try_load_sprite(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		var res: Resource = load(path)
+		if res is Texture2D:
+			return res
+	var img := Image.new()
+	if img.load(path) == OK:
+		return ImageTexture.create_from_image(img)
+	push_warning("Could not load sprite at %s" % path)
+	return null
 
 func _wire_hud_and_debug() -> void:
 	hud.player = player
