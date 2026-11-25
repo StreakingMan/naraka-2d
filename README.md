@@ -19,6 +19,14 @@
 
 但这段经历却是非常宝贵的。
 
+那几年在各个引擎之间来回折腾，也顺手在开源社区里留下了一些脚印：
+
+- **PixiJS**：刚学 Pixi 那会儿，被官方粒子示例里密密麻麻的蛆吓到了，去提了个 issue 求换图（[pixijs/examples#145](https://github.com/pixijs/examples/issues/145)）。维护者回了句「换成小熊软糖吧，欢迎 PR」，我就画了一堆 doge 提了 PR（[#154](https://github.com/pixijs/examples/pull/154)），被礼貌地关掉了：示例图不能光可爱，得先有用。（这事要不是这次归档翻记录，我自己都忘了。）
+- **Spine × Phaser**：给角色加上物理、再用 `scaleX = -1` 让它转身，包围盒就歪了，于是去 Spine 官方提了 [EsotericSoftware/spine-runtimes#2425](https://github.com/EsotericSoftware/spine-runtimes/issues/2425)。维护者 badlogic 很快确认是 bug；半年后我换成 matter 物理又试了一次，录了视频补充上去；又过了快一年，官方在 4.2.79 里修掉了。一个横版游戏最基础的「转身」，在社区里来回了一年半。
+- **再后来**：2025 年我在一个用 AI 驱动 Spine 的 MCP 项目下面问了句「项目进展？」（[neko233-ai-mcp-spine#1](https://github.com/SolarisNeko/neko233-ai-mcp-spine/issues/1)），算是这个项目和 AI 时代第一次碰头。
+
+这些 issue 和 PR 都不大，但那是我第一次正经地用英文给别人的项目提问题、补复现、跟进修复，也第一次知道，维护者说「不」的时候，往往是对的。
+
 在 AI 游戏遍地的今天，「一句话生成 xxx」「不会写代码，但我做出了 xxx」「一个月做出 100 款小游戏」随处可见。这里面的确有不少优秀的游戏，但截至写这篇的时候，大部分还是 AI slop，社区里甚至已经出现了强烈的反 AI 游戏风潮。
 
 但其实玩家反对的从来不是用 AI 做游戏，而是粗制滥造。甚至有不少用 AI 做游戏的人，自己都没玩过做出来的那坨东西，就开始卖了。
